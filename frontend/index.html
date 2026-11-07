@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoomAI — Intelligent Resume Assistant</title>
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Marked.js for rich markdown parsing in chat answers -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #0a0a10;
+            --glass-bg: rgba(26, 27, 44, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.03);
+            --primary: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --primary-glow: rgba(139, 92, 246, 0.35);
+            --accent-cyan: #06b6d4;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --bot-bubble: rgba(30, 32, 54, 0.65);
+            --user-bubble: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Backgrounds */
+        .ambient-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        .orb-1 {
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, #7c3aed, transparent 70%);
+            top: -100px;
+            left: -100px;
+        }
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #06b6d4, transparent 70%);
+            bottom: -150px;
+            right: -100px;
+        }
+
+        .app-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 1280px;
+            height: calc(100vh - 48px);
+            max-height: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Glassmorphism Navigation / Header */
+        header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--primary));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px var(--primary-glow);
+            font-size: 18px;
+        }
+        .brand-text h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(139, 92, 246, 0.15);
+            color: #c4b5fd;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        /* Main Workspace Grid */
+        .workspace {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Common Glass Panel */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .panel-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .panel-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Sidebar - Resume / Upload */
+        .sidebar {
+            padding: 20px;
+            overflow-y: auto;
+            gap: 18px;
+        }
+
+        .dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: var(--radius-md);
+            padding: 24px 16px;
+            text-align: center;
+            transition: all 0.25s ease;
+            cursor: pointer;
+            background: var(--glass-highlight);
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(139, 92, 246, 0.08);
+        }
+        .dropzone i {
+            font-size: 30px;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        .dropzone p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .dropzone p span {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+        .file-input {
+            display: none;
+        }
+
+        .btn-upload {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px var(--primary-glow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .btn-upload:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        .btn-upload:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-msg {
+            font-size: 12px;
+            color: var(--accent-cyan);
+            min-height: 16px;
+            text-align: center;
+        }
+
+        /* Candidate Details */
+        .resume-card {
+            display: none;
+            padding-top: 10px;
+            border-top: 1px solid var(--glass-border);
+        }
+        .resume-section {
+            margin-bottom: 14px;
+        }
+        .resume-section h4 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+        .resume-section p, .resume-section div {
+            font-size: 12.5px;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+        .skill-tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--glass-border);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            margin: 2px 2px 4px 0;
+            color: #e2e8f0;
+        }
+
+        /* Chat Section */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message-row {
+            display: flex;
+            gap: 12px;
+            max-width: 82%;
+            animation: fadeIn 0.25s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-row.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .message-row.bot {
+            align-self: flex-start;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .user .avatar {
+            background: var(--primary);
+            color: #fff;
+        }
+        .bot .avatar {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border);
+            color: var(--accent-cyan);
+        }
+
+        .bubble {
+            padding: 14px 18px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-break: break-word;
+            border: 1px solid var(--glass-border);
+        }
+        .user .bubble {
+            background: var(--user-bubble);
+            border-bottom-right-radius: 4px;
+            color: #fff;
+        }
+        .bot .bubble {
+            background: var(--bot-bubble);
+            backdrop-filter: blur(12px);
+            border-bottom-left-radius: 4px;
+            color: #e2e8f0;
+        }
+        .bot .bubble ul, .bot .bubble ol {
+            padding-left: 20px;
+            margin: 6px 0;
+        }
+        .bot .bubble p {
+            margin-bottom: 6px;
+        }
+        .bot .bubble p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Blinking cursor for streaming */
+        .typing-cursor::after {
+            content: '▋';
+            display: inline-block;
+            vertical-align: middle;
+            color: var(--accent-cyan);
+            animation: blink 0.8s infinite;
+            margin-left: 3px;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            50.1%, 100% { opacity: 0; }
+        }
+
+        /* Chat Input Bar */
+        .input-bar-container {
+            padding: 16px 20px;
+            border-top: 1px solid var(--glass-border);
+            background: rgba(16, 17, 28, 0.4);
+        }
+
+        .chat-form {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 6px 8px 6px 16px;
+            transition: all 0.2s ease;
+        }
+        .chat-form:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+        }
+
+        .chat-form input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: 14px;
+            padding: 8px 0;
+        }
+        .chat-form input::placeholder {
+            color: #64748b;
+        }
+
+        .chat-form button {
+            background: var(--primary);
+            border: none;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.2s ease;
+        }
+        .chat-form button:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: scale(1.05);
+        }
+        .chat-form button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        @media (max-width: 900px) {
+            body { padding: 12px; }
+            .app-wrapper { height: auto; max-height: none; }
+            .workspace { grid-template-columns: 1fr; }
+            .chat-container { height: 550px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+
+    <div class="app-wrapper">
+        <header>
+            <div class="brand">
+                <div class="brand-icon"><i class="fa-solid fa-bolt"></i></div>
+                <div class="brand-text">
+                    <h1>DoomAI</h1>
+                    <p>Real-time Resume Intelligence</p>
+                </div>
+            </div>
+            <span class="badge"><i class="fa-solid fa-circle-dot" style="color: #10b981; margin-right: 5px;"></i> Groq Powered</span>
+        </header>
+
+        <div class="workspace">
+            <!-- Sidebar: Document & Meta -->
+            <section class="glass-panel sidebar">
+                <div class="panel-header" style="padding: 0 0 14px 0; border: none;">
+                    <h2><i class="fa-regular fa-file-pdf"></i> Resume Document</h2>
+                </div>
+
+                <div class="dropzone" id="dropArea" onclick="document.getElementById('resumeFile').click()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p id="fileNameDisplay"><span>Click or drag</span> PDF resume here</p>
+                    <input type="file" id="resumeFile" class="file-input" accept=".pdf,application/pdf">
+                </div>
+
+                <button id="uploadBtn" class="btn-upload" onclick="uploadResume()">
+                    <i class="fa-solid fa-arrow-up-from-bracket"></i> Upload & Analyze
+                </button>
+
+                <p id="status" class="status-msg"></p>
+
+                <div id="resumeDetails" class="resume-card">
+                    <!-- Populated via displayResume() -->
+                </div>
+            </section>
+
+            <!-- Main Panel: Streaming Chat -->
+            <section class="glass-panel chat-container">
+                <div class="panel-header">
+                    <h2><i class="fa-regular fa-comments"></i> Conversation</h2>
+                    <span id="sessionStatus" style="font-size: 12px; color: var(--text-muted);">Awaiting resume</span>
+                </div>
+
+                <div id="chatBox" class="chat-messages">
+                    <div class="message-row bot">
+                        <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                        <div class="bubble">
+                            Welcome! Upload a candidate's PDF resume on the left to start examining their qualifications, experience, and skills in real-time.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-bar-container">
+                    <form id="chatForm" class="chat-form">
+                        <input
+                            type="text"
+                            id="question"
+                            placeholder="Ask e.g., 'Summarize their key technical strengths'..."
+                            autocomplete="off"
+                            required
+                        />
+                        <button type="submit" id="sendBtn" title="Send message">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
+
+<script>
+    const API_URL = "http://127.0.0.1:8000";
+
+    const fileInput = document.getElementById("resumeFile");
+    const dropArea = document.getElementById("dropArea");
+    const fileNameDisplay = document.getElementById("fileNameDisplay");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const statusMsg = document.getElementById("status");
+    const resumeDetails = document.getElementById("resumeDetails");
+    const sessionStatus = document.getElementById("sessionStatus");
+
+    // Drag and drop handlers
+    ["dragenter", "dragover"].forEach(name => {
+        dropArea.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropArea.classList.add("dragover");
+        });
+    });
+    ["dragleave", "drop"].forEach(name => {
+        dropArea.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropArea.classList.remove("dragover");
+        });
+    });
+    dropArea.addEventListener("drop", (e) => {
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelection();
+        }
+    });
+
+    fileInput.addEventListener("change", handleFileSelection);
+
+    function handleFileSelection() {
+        if (fileInput.files.length > 0) {
+            const name = fileInput.files[0].name;
+            fileNameDisplay.innerHTML = `Selected: <strong>${escapeHTML(name)}</strong>`;
+        }
+    }
+
+    async function uploadResume() {
+        const file = fileInput.files[0];
+        if (!file) {
+            statusMsg.textContent = "Please select a PDF file first.";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        uploadBtn.disabled = true;
+        statusMsg.textContent = "Parsing candidate profile...";
+
+        try {
+            const response = await fetch(`${API_URL}/upload`, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || "Upload failed");
+
+            statusMsg.textContent = "Resume parsed successfully!";
+            sessionStatus.textContent = "Ready for queries";
+            sessionStatus.style.color = "#10b981";
+
+            displayResume(data.resume);
+            addChatMessage("bot", "Resume parsed successfully. What would you like to know about this candidate?");
+        } catch (err) {
+            statusMsg.textContent = "Error: " + err.message;
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    }
+
+    function displayResume(resume) {
+        resumeDetails.style.display = "block";
+
+        const skillsHtml = (resume.skills || []).length
+            ? (resume.skills || []).map(s => `<span class="skill-tag">${escapeHTML(s)}</span>`).join("")
+            : "None listed";
+
+        const expHtml = (resume.experience || []).length
+            ? (resume.experience || []).map(exp => `
+                <div style="margin-bottom: 8px;">
+                    <strong>${escapeHTML(exp.role || "Role")}</strong> @ ${escapeHTML(exp.company || "Company")}
+                    <div style="font-size:11px; color:#94a3b8;">${escapeHTML(exp.duration || "")}</div>
+                    <div style="font-size:12px; margin-top:2px;">${escapeHTML(exp.description || "")}</div>
+                </div>
+            `).join("")
+            : "None listed";
+
+        resumeDetails.innerHTML = `
+            <div class="resume-section">
+                <h4>Candidate</h4>
+                <p><strong>${escapeHTML(resume.name || "N/A")}</strong></p>
+                <p style="font-size:11px; color:#94a3b8;">${escapeHTML(resume.email || "")} ${resume.phone ? '• ' + escapeHTML(resume.phone) : ''}</p>
+            </div>
+            <div class="resume-section">
+                <h4>Skills</h4>
+                <div>${skillsHtml}</div>
+            </div>
+            <div class="resume-section">
+                <h4>Experience</h4>
+                <div>${expHtml}</div>
+            </div>
+            <div class="resume-section">
+                <h4>Summary</h4>
+                <p>${escapeHTML(resume.summary || "N/A")}</p>
+            </div>
+        `;
+    }
+
+    function addChatMessage(role, text) {
+        const chatBox = document.getElementById("chatBox");
+        const row = document.createElement("div");
+        row.className = `message-row ${role}`;
+
+        const avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.innerHTML = role === "user" ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-robot"></i>';
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.innerHTML = marked.parse(text || "");
+
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+        chatBox.appendChild(row);
+
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return bubble;
+    }
+
+    // Chat submit & response streaming
+    document.getElementById("chatForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = document.getElementById("question");
+        const sendBtn = document.getElementById("sendBtn");
+        const chatBox = document.getElementById("chatBox");
+        const query = input.value.trim();
+
+        if (!query) return;
+
+        addChatMessage("user", query);
+        input.value = "";
+        sendBtn.disabled = true;
+
+        // Create empty bot bubble with cursor animation
+        const botBubble = addChatMessage("bot", "");
+        botBubble.classList.add("typing-cursor");
+
+        try {
+            const response = await fetch(`${API_URL}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question: query })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Request failed");
+            }
+
+            if (!response.body) throw new Error("ReadableStream not supported by browser.");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedRaw = "";
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                accumulatedRaw += decoder.decode(value, { stream: true });
+                // Render markdown live as tokens arrive
+                botBubble.innerHTML = marked.parse(accumulatedRaw);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+            accumulatedRaw += decoder.decode();
+            botBubble.innerHTML = marked.parse(accumulatedRaw || "No response received.");
+        } catch (err) {
+            botBubble.innerHTML = `<span style="color: #f87171;">Error: ${escapeHTML(err.message)}</span>`;
+        } finally {
+            botBubble.classList.remove("typing-cursor");
+            sendBtn.disabled = false;
+            input.focus();
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    });
+
+    function escapeHTML(str) {
+        return String(str || "").replace(/[&<>"']/g, c => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        }[c]));
+    }
+</script>
+
+</body>
+</html>
