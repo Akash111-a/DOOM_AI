@@ -25,7 +25,7 @@ if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is missing from the .env file")
 
 client = Groq(api_key=GROQ_API_KEY)
-
+# openai/gpt-oss-120b
 MODEL = "openai/gpt-oss-120b"
 
 
